@@ -111,9 +111,13 @@ bool q_insert_tail(struct list_head *head, char *s)
     element_t *ele = malloc(sizeof(element_t));
     if (!ele)
         return false;
+    // causing corruption
+    /*
     ele->value = malloc(sizeof(s));
     memset(ele->value, '\0', strlen(ele->value));
     strncpy(ele->value, s, strlen(s));
+    */
+    ele->value = strdup(s);
     list_add_tail(&ele->list, head);
     return true;
 }
@@ -156,6 +160,19 @@ element_t *q_remove_head(struct list_head *head, char *sp, size_t bufsize)
  */
 element_t *q_remove_tail(struct list_head *head, char *sp, size_t bufsize)
 {
+    if (!head || list_empty(head))
+        return NULL;
+
+    if (sp) {
+        element_t *e = list_entry(head->prev, element_t, list);
+        size_t len = strlen(e->value);
+        len = (bufsize - 1) > len ? len : (bufsize - 1);
+        memcpy(sp, e->value, len);
+        sp[len] = '\0';
+
+        list_del(&e->list);
+        return e;
+    }
     return NULL;
 }
 
