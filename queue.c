@@ -212,6 +212,20 @@ int q_size(struct list_head *head)
 bool q_delete_mid(struct list_head *head)
 {
     // https://leetcode.com/problems/delete-the-middle-node-of-a-linked-list/
+    if (!head || list_empty(head)) {
+        return false;
+    }
+    struct list_head *front = head->next;
+    struct list_head *end = head->prev;
+    while (true) {
+        if (front == end || front->next == end) {
+            list_del(front);
+            q_release_element(list_entry(front, element_t, list));
+            break;
+        }
+        front = front->next;
+        end = end->prev;
+    }
     return true;
 }
 
@@ -226,7 +240,21 @@ bool q_delete_mid(struct list_head *head)
  */
 bool q_delete_dup(struct list_head *head)
 {
+    printf("delete dup\n");
     // https://leetcode.com/problems/remove-duplicates-from-sorted-list-ii/
+    if (!head)
+        return false;
+    element_t *node, *tmp;
+    char *prev_value = "";
+    list_for_each_entry_safe (node, tmp, head, list) {
+        if (strcmp(prev_value, node->value) == 0) {
+            list_del(&node->list);
+            free(node->value);
+            free(node);
+        } else {
+            prev_value = node->value;
+        }
+    }
     return true;
 }
 
@@ -245,7 +273,21 @@ void q_swap(struct list_head *head)
  * (e.g., by calling q_insert_head, q_insert_tail, or q_remove_head).
  * It should rearrange the existing ones.
  */
-void q_reverse(struct list_head *head) {}
+void q_reverse(struct list_head *head)
+{
+    if (!head || list_empty(head))
+        return;
+
+    struct list_head *prev = head->prev, *curr = head, *next = NULL;
+
+    while (next != head) {
+        next = curr->next;
+        curr->next = prev;
+        curr->prev = next;
+        prev = curr;
+        curr = next;
+    }
+}
 
 /*
  * Sort elements of queue in ascending order
