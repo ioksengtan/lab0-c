@@ -28,30 +28,34 @@ struct list_head *q_new()
 /* Free all storage used by queue */
 void q_free(struct list_head *l)
 {
-    if (l == NULL) {
-        return;
-    }
-    struct list_head *node = l->next;
-    while (node != l) {
+    /*
+        if (l == NULL) {
+            return;
+        }
+        struct list_head *node = l->next;
+        while (node != l) {
+            // cppcheck-suppress nullPointer
+            element_t *e = container_of(node, element_t, list);
+            node = node->next;
+            q_release_element(e);
+        }
         // cppcheck-suppress nullPointer
-        element_t *e = container_of(node, element_t, list);
-        node = node->next;
-        q_release_element(e);
+        element_t *head = container_of(l, element_t, list);
+        free(head);
+        */
+    // bad
+    if (!l)
+        return;
+
+    // iterate over the list entries and remove it
+    element_t *entry, *safe;
+    list_for_each_entry_safe (entry, safe, l, list) {
+        q_release_element(entry);
     }
     // cppcheck-suppress nullPointer
     element_t *head = container_of(l, element_t, list);
     free(head);
-    // bad
-    /*
-        if (!l)
-            return;
-
-        // iterate over the list entries and remove it
-        element_t *entry, *safe;
-        list_for_each_entry_safe (entry, safe, l, list)
-            q_release_element(entry);
-        free(l);
-    */
+    // free(l);
 }
 
 /*
@@ -63,29 +67,16 @@ void q_free(struct list_head *l)
  */
 bool q_insert_head(struct list_head *head, char *s)
 {
-    /*
-        if (!head)
-            return false;
-        element_t *ele = malloc(sizeof(element_t));
-        if (!ele)
-            return false;
-        ele->value = malloc(sizeof(s));
-        memset(ele->value, '\0', strlen(ele->value));
-        strncpy(ele->value, s, strlen(s));
-        list_add(&ele->list, head);
-        return true;
-    */
     if (!head)
         return false;
-
-    // allocate memory for element_t
     element_t *new_entry = malloc(sizeof(element_t));
     if (!new_entry)
         return false;
-
     size_t len = strlen(s) + 1;
-    // allocate memory for 'value' in element_t
+
     new_entry->value = malloc(len);
+    // allocate memory for 'value' in element_t
+    // new_entry->value = malloc(len);
     if (!(new_entry->value)) {
         free(new_entry);
         return false;
@@ -104,21 +95,38 @@ bool q_insert_head(struct list_head *head, char *s)
  * Argument s points to the string to be stored.
  * The function must explicitly allocate space and copy the string into it.
  */
+
+static element_t *alloc_helper(const char *s)
+{
+    element_t *element;
+    size_t slen;
+    if (!s)
+        return NULL;
+    element = malloc(sizeof(element_t));
+    if (!element)
+        return NULL;
+
+    INIT_LIST_HEAD(&element->list);
+
+    slen = strlen(s) + 1;
+    element->value = malloc(slen);
+    if (!element->value) {
+        free(element);
+        return NULL;
+    }
+    memcpy(element->value, s, slen);
+    return element;
+}
+
 bool q_insert_tail(struct list_head *head, char *s)
 {
+    element_t *element;
     if (!head)
         return false;
-    element_t *ele = malloc(sizeof(element_t));
-    if (!ele)
+    element = alloc_helper(s);
+    if (!element)
         return false;
-    // causing corruption
-    /*
-    ele->value = malloc(sizeof(s));
-    memset(ele->value, '\0', strlen(ele->value));
-    strncpy(ele->value, s, strlen(s));
-    */
-    ele->value = strdup(s);
-    list_add_tail(&ele->list, head);
+    list_add_tail(&element->list, head);
     return true;
 }
 
@@ -200,6 +208,7 @@ int q_size(struct list_head *head)
         len++;
     return len;
 }
+
 
 /*
  * Delete the middle node in list.
@@ -302,5 +311,42 @@ void q_reverse(struct list_head *head)
  * No effect if q is NULL or empty. In addition, if q has only one
  * element, do nothing.
  */
+static struct list_head *get_mid_node(const struct list_head *head)
+{
+    struct list_head *i = head->next, *j = head->prev;
+    while (i != j && i->next != j)
+        i = i->next, j = j->prev;
+    return j;
+}
 
-void q_sort(struct list_head *head) {}
+void q_sort(struct list_head *head)
+{
+    // Merge sort
+    struct list_head *i, *j, *tmp;
+    LIST_HEAD(new_head);
+    if (!head || list_empty(head) || list_is_singular(head))
+        return;
+    // Split the list
+    list_cut_position(&new_head, head, get_mid_node(head)->prev);
+    // Call recursively
+    q_sort(&new_head);
+    q_sort(head);
+    // Insert nodes in new_head to head
+    i = head->next;
+    for (j = new_head.next; !list_empty(&new_head); j = tmp) {
+        while (i != head &&
+               strcmp(((element_t *) list_entry(i, element_t, list))->value,
+                      ((element_t *) list_entry(j, element_t, list))->value) <
+                   0) {
+            i = i->next;
+        }
+        if (i == head) {
+            // All of the remaining elements in new_head is greater than i
+            list_splice_tail_init(&new_head, i);
+        } else {
+            tmp = j->next;
+            list_del_init(j);
+            list_add_tail(j, i);
+        }
+    }
+}
